@@ -979,6 +979,7 @@
 }
 
 </style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
@@ -1002,7 +1003,7 @@
       <h2>Pull up a chair.</h2>
       <p class="auth-gate__sub">Sign in (or create a free account) to leave your honest two cents on games &amp; movies.</p>
 
-      <div class="auth-gate__form">
+<div class="auth-gate__form">
         <div class="auth-gate__field">
           <label for="gate-email">Email</label>
           <input type="email" id="gate-email" placeholder="you@example.com" autocomplete="email">
@@ -1011,13 +1012,19 @@
           <label for="gate-pass">Password</label>
           <input type="password" id="gate-pass" placeholder="••••••••" autocomplete="current-password">
         </div>
+
+        <!-- ADD THIS CAPTCHA FIELD HERE -->
+        <div class="auth-gate__field">
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAEIVB3JzfCSFH3lH" id="turnstile-widget"></div>
+        </div>
+
         <div class="auth-gate__actions">
           <button class="btn" id="gate-login-btn" type="button" style="background:var(--paper-card-2); border:1.5px solid var(--ink);">Log In</button>
           <button class="btn btn--primary" id="gate-signup-btn" type="button">Sign Up</button>
         </div>
         <p class="auth-gate__error" id="gate-error"></p>
       </div>
-
+   
       <p class="auth-gate__foot">"No bots. No sponsored critics. Just your two cents."</p>
     </div>
   </section>
@@ -1299,25 +1306,45 @@
     const password = document.getElementById("gate-pass").value;
     const errorEl = document.getElementById("gate-error");
 
+    // Retrieve Turnstile token if available
+    const captchaToken = typeof turnstile !== "undefined" ? turnstile.getResponse() : null;
+
     if (!email || !password) {
       errorEl.textContent = "Enter email and password.";
       return;
     }
+
+    if (!captchaToken) {
+      errorEl.textContent = "Please complete the CAPTCHA verification.";
+      return;
+    }
+
     errorEl.textContent = "Loading...";
 
     let res;
     if (action === 'signup') {
-      res = await supabaseClient.auth.signUp({ email, password });
+      res = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: { captchaToken }
+      });
+
       if (!res.error && !res.data.session) {
         errorEl.textContent = "Check your email for confirmation!";
+        if (typeof turnstile !== "undefined") turnstile.reset();
         return;
       }
     } else {
-      res = await supabaseClient.auth.signInWithPassword({ email, password });
+      res = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+        options: { captchaToken }
+      });
     }
 
     if (res.error) {
       errorEl.textContent = res.error.message;
+      if (typeof turnstile !== "undefined") turnstile.reset();
     } else {
       closeAuthGate();
     }
@@ -2358,15 +2385,18 @@ function renderModalReviews(id, kind) {
     criticNote.textContent = "";
     criticResults.innerHTML = "";
 
-    const catalogContext = Array.from(lastRenderedItems.values()).map(item => ({
-      id: item.id,
-      title: item.title,
-      kind: item.kind,
-      genre: item.genre,
-      year: item.year,
-      score: item.score,
-      description: item.description || "No description provided."
-    }));
+    // Limit catalog to 50 items and truncate descriptions to 120 chars
+    const catalogContext = Array.from(lastRenderedItems.values())
+      .slice(0, 50)
+      .map(item => ({
+        id: item.id,
+        title: item.title,
+        kind: item.kind,
+        genre: item.genre,
+        year: item.year,
+        score: item.score,
+        description: item.description ? item.description.substring(0, 120) : "No description provided."
+      }));
 
     if (catalogContext.length === 0){
       setCriticStatus("");
@@ -2419,3 +2449,4 @@ function renderModalReviews(id, kind) {
   </script>
 </body>
 </html>
+
