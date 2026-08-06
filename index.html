@@ -2351,15 +2351,19 @@ function renderModalReviews(id, kind) {
     criticNote.textContent = "";
     criticResults.innerHTML = "";
 
-    const catalogContext = Array.from(lastRenderedItems.values()).map(item => ({
-      id: item.id,
-      title: item.title,
-      kind: item.kind,
-      genre: item.genre,
-      year: item.year,
-      score: item.score,
-      description: item.description || "No description provided."
-    }));
+    // Map items to lightweight objects & limit to 50 items max to prevent 413 errors
+    const catalogContext = Array.from(lastRenderedItems.values())
+      .slice(0, 50)
+      .map(item => ({
+        id: item.id,
+        title: item.title,
+        kind: item.kind,
+        genre: item.genre,
+        year: item.year,
+        score: item.score,
+        // Truncate description to 120 chars max to keep the request size small
+        description: item.description ? item.description.substring(0, 120) : "No description."
+      }));
 
     if (catalogContext.length === 0){
       setCriticStatus("");
