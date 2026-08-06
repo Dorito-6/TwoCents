@@ -980,6 +980,7 @@
 
 </style>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/leo-profanity@1.7.0/lib/index.min.js"></script>
 </head>
 <body>
 
@@ -1473,28 +1474,33 @@
     return reviewsCache.get(movieId) || [];
   }
 
-  async function addReview(movieId, review){
-    if (!currentUser) throw new Error("You must be logged in to post a review.");
+  async function addReview(movieId, review) {
+  if (!currentUser) throw new Error("You must be logged in to post a review.");
 
-    const { error } = await supabaseClient.from("reviews").insert({
-      movie_id: movieId,
-      user_id: currentUser.id,
-      author: currentUser.email.split('@')[0],
-      text: review.text,
-      rating: review.rating,
-      verified: review.verified,
-      flag_count: 0
-    });
-
-    if (error){
-      if (error.code === '23505') {
-        throw new Error("You have already reviewed this title! Only one review per title is allowed.");
-      }
-      console.error("Failed to publish review:", error);
-      throw new Error("Couldn't publish check your connection.");
-    }
-    await loadAllReviews();
+  // Check for swear words using the library
+  if (typeof LeoProfanity !== "undefined" && LeoProfanity.check(review.text)) {
+    throw new Error("Please keep your review clean! Swear words are not allowed.");
   }
+
+  const { error } = await supabaseClient.from("reviews").insert({
+    movie_id: movieId,
+    user_id: currentUser.id,
+    author: currentUser.email.split('@')[0],
+    text: review.text,
+    rating: review.rating,
+    verified: review.verified,
+    flag_count: 0
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error("You have already reviewed this title!");
+    }
+    console.error("Failed to publish review:", error);
+    throw new Error("Couldn't publish, check your connection.");
+  }
+  await loadAllReviews();
+}
 
    function getFlaggedReviews() {
   return JSON.parse(localStorage.getItem("flagged_reviews") || "[]");
@@ -1904,7 +1910,7 @@ function markReviewAsFlagged(reviewId) {
   }
 
   /* =========================================================================
-     STEP 4B — CATALOG SEARCH BAR
+     STEP  — CATALOG SEARCH BAR
      ========================================================================= */
   const catalogSearchInput = document.getElementById("catalog-search-input");
   const catalogSearchClear = document.getElementById("catalog-search-clear");
