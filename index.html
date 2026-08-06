@@ -2383,11 +2383,11 @@ function markReviewAsFlagged(reviewId) {
     }
 
        try {
-      const response = await fetch("/api/critic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ catalog: catalogContext, query })
-      });
+   const response = await fetch("/api/critic", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ catalog: candidates, query: prompt }) 
+});
 
       if (!response.ok) throw new Error("API responded with an error");
 
