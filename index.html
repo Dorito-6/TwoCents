@@ -2383,27 +2383,50 @@ function markReviewAsFlagged(reviewId) {
     }
 
     try {
-      const response = await fetch("/api/critic", {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
+          "Authorization": "Bearer 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",
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          query: prompt,
-          catalog: candidates.slice(0, 40),
-          mediaType
+          model: "google/gemini-2.5-flash-lite-preview",
+          messages: [
+            {
+              role: "system",
+              content: `You are an opinionated, punchy cultural critic (movies and games). 
+Your task is to recommend exactly 3 items from the provided catalog that best match the user's mood/prompt. 
+Return your response ONLY as a strict JSON array of objects. Do not include markdown code blocks, introductory text, or concluding text. 
+Each object must have exactly three keys: 
+- "id": the exact string ID provided in the catalog.
+- "reason": A short, 1-2 sentence punchy reason why you picked it.
+- "note": A general 1-sentence sign-off or observation about their prompt to show at the top.`
+            },
+            {
+              role: "user",
+              content: `Catalog: ${JSON.stringify(candidates.slice(0, 40))}\n\nUser Prompt: "${prompt}"`
+            }
+          ]
         })
       });
 
       if (!response.ok) throw new Error("API responded with an error");
 
       const data = await response.json();
-      const picks = data.picks || [];
+      let rawText = data.choices[0].message.content.trim();
+      
+      if (rawText.startsWith("```json")) {
+        rawText = rawText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+      } else if (rawText.startsWith("```")) {
+        rawText = rawText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+      }
+
+      const picks = JSON.parse(rawText);
 
       criticStatus.classList.add("is-hidden");
 
-      if (data.note) {
-        criticNote.textContent = `"${data.note}"`;
+      if (picks.length > 0 && picks[0].note) {
+        criticNote.textContent = `"${picks[0].note}"`;
         criticNote.classList.remove("is-hidden");
       }
 
