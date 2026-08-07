@@ -2368,6 +2368,8 @@ function markReviewAsFlagged(reviewId) {
     }
   });
 
+  const GROQ_API_KEY = "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";
+
   criticAskBtn.addEventListener("click", async () => {
     const prompt = criticInput.value.trim();
     if (!prompt) return;
@@ -2395,16 +2397,67 @@ function markReviewAsFlagged(reviewId) {
     }
 
        try {
-   const response = await fetch("/api/critic", {
+    const systemPrompt = `
+You are a sharp, witty, and opinionated entertainment critic.
+Analyze the provided catalog items and pick 3 standout titles worth checking out.
+
+${prompt
+  ? `The user described what they're in the mood for: "${prompt}". Your picks and reasons MUST be tailored specifically to this request — favor titles that genuinely match the requested mood, genre, tone, length, or vibe over generically "acclaimed" ones. If nothing in the catalog is a good match, say so honestly in "note" and pick the closest available options.`
+  : `The user didn't specify a mood, so use your judgment to pick 3 varied, genuinely interesting standouts (avoid defaulting to the same obvious picks every time — vary your reasoning based on what's unusual or notable in this specific catalog).`
+}
+
+RULES:
+1. ONLY pick item IDs present in the provided catalog context.
+2. DO NOT invent or fabricate any titles or IDs.
+3. You MUST reply ONLY with valid JSON in the following structure:
+{
+  "note": "A short, sharp 1-sentence commentary on the state of this catalog.",
+  "picks": [
+    {
+      "id": "item-id-here",
+      "reason": "One punchy sentence explaining why to watch or play it."
+    }
+  ]
+}
+`;
+
+   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ catalog: candidates, query: prompt }) 
+  headers: {
+    "Authorization": `Bearer ${GROQ_API_KEY}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "openai/gpt-oss-120b",
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: prompt
+          ? `The user's mood/request: "${prompt}"\n\nHere is the current catalog:\n${JSON.stringify(candidates, null, 2)}`
+          : `No specific mood given. Here is the current catalog:\n${JSON.stringify(candidates, null, 2)}`
+      }
+    ],
+    temperature: 0.7
+  })
 });
 
-      if (!response.ok) throw new Error("API responded with an error");
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Groq API error: ${errText}`);
+      }
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      const groqData = await response.json();
+      let rawText = groqData.choices[0].message.content.trim();
+
+      if (rawText.startsWith("```json")) {
+        rawText = rawText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+      } else if (rawText.startsWith("```")) {
+        rawText = rawText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+      }
+
+      const data = JSON.parse(rawText);
 
       // /api/critic already returns the parsed { note, picks } object -
       // there is no data.choices[0].message.content to dig into here.
