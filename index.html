@@ -2372,7 +2372,7 @@ function markReviewAsFlagged(reviewId) {
   // views page source / opens dev tools on this site.
   // Hardcoded per your request - this key is now visible to anyone who
   // views page source / opens dev tools on this site.
-  const GROQ_API_KEY = "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";
+  const GROQ_API_KEY = "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";
 
   criticAskBtn.addEventListener("click", async () => {
     const prompt = criticInput.value.trim();
@@ -2385,14 +2385,20 @@ function markReviewAsFlagged(reviewId) {
     criticStatus.innerHTML = `<div class="critic__spinner"></div> Thinking…`;
 
     const mediaType = getMediaType();
-    const candidates = Array.from(lastRenderedItems.values()).map(item => ({
-      id: item.id,
-      title: item.title,
-      genre: item.genre,
-      year: item.year,
-      score: item.score,
-      description: item.description
-    }));
+    const MAX_CANDIDATES = 30;
+    const MAX_DESCRIPTION_CHARS = 120;
+    const candidates = Array.from(lastRenderedItems.values())
+      .slice(0, MAX_CANDIDATES)
+      .map(item => ({
+        id: item.id,
+        title: item.title,
+        genre: item.genre,
+        year: item.year,
+        score: item.score,
+        description: item.description
+          ? item.description.slice(0, MAX_DESCRIPTION_CHARS)
+          : ""
+      }));
 
     if (candidates.length === 0) {
       criticStatus.innerHTML = "No titles loaded in the catalog right now to pick from!";
@@ -2426,8 +2432,8 @@ RULES:
 `;
 
    const userContent = prompt
-     ? `The user's mood/request: "${prompt}"\n\nHere is the current catalog:\n${JSON.stringify(candidates, null, 2)}`
-     : `No specific mood given. Here is the current catalog:\n${JSON.stringify(candidates, null, 2)}`;
+     ? `The user's mood/request: "${prompt}"\n\nHere is the current catalog:\n${JSON.stringify(candidates)}`
+     : `No specific mood given. Here is the current catalog:\n${JSON.stringify(candidates)}`;
 
    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
   method: "POST",
