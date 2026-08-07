@@ -872,6 +872,18 @@
   border-radius:8px; padding:6px 14px; margin-bottom:22px;
 }
 .modal__score::before{ content:"★"; color:var(--gold-fill); }
+.modal__cast{
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  margin:0 0 16px; font-size:13px;
+}
+.modal__cast-label{
+  font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.06em;
+  font-size:11px; color:var(--ink-faint);
+}
+.modal__cast-chip{
+  background:var(--paper-card-2); border:1px solid var(--rule-strong);
+  border-radius:999px; padding:4px 11px; font-size:12.5px; color:var(--ink-soft);
+}
 .modal__bars{ display:flex; flex-direction:column; gap:8px; }
 .modal__bars .bar-row{ font-size:12.5px; }
 .modal__bars .bar-row__track{ height:8px; }
@@ -1173,6 +1185,7 @@
           </span>
           <h2 class="modal__title" id="modal-title"></h2>
           <p class="modal__meta" id="modal-meta"></p>
+          <div class="modal__cast" id="modal-cast"></div>
           <div class="modal__score" id="modal-score"></div>
 
           <a href="#" target="_blank" rel="noopener" class="btn btn--outline" id="modal-external-link" style="margin-bottom:18px;"></a>
@@ -1469,6 +1482,66 @@
 
     trailerCache.set(id, key);
     return key;
+  }
+
+  /* =========================================================================
+     CAST / CREW LOOKUP
+     ========================================================================= */
+  let castCache = new Map();
+
+  async function fetchCastInfo(id){
+    if (castCache.has(id)) return castCache.get(id);
+
+    const numericId = id.slice(2);
+    let result = null;
+
+    try {
+      if (id.startsWith("m-")){
+        const url = `${TMDB_BASE}/movie/${numericId}/credits?api_key=${TMDB_API_KEY}&language=en-US`;
+        const res = await fetch(url);
+        if (res.ok){
+          const data = await res.json();
+          const cast = (data.cast || [])
+            .slice()
+            .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+            .slice(0, 3)
+            .map(c => c.name)
+            .filter(Boolean);
+          if (cast.length) result = { label: "Starring", names: cast };
+        }
+      } else {
+        const res = await fetch(`${IGDB_PROXY_BASE}/games`, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: `fields involved_companies.company.name, involved_companies.developer, involved_companies.publisher; where id = ${numericId};`
+        });
+        if (res.ok){
+          const data = await res.json();
+          const involved = (data && data[0] && data[0].involved_companies) || [];
+          const names = involved
+            .filter(c => c.developer || c.publisher)
+            .map(c => c.company && c.company.name)
+            .filter(Boolean)
+            .slice(0, 3);
+          if (names.length) result = { label: "Developed by", names };
+        }
+      }
+    } catch (err){
+      console.error("Cast lookup failed:", err);
+    }
+
+    castCache.set(id, result);
+    return result;
+  }
+
+  function renderCast(info){
+    const wrap = document.getElementById("modal-cast");
+    if (!info || !info.names.length){
+      wrap.innerHTML = "";
+      return;
+    }
+    wrap.innerHTML = `<span class="modal__cast-label">${info.label}</span>` +
+      info.names.map(name => `<span class="modal__cast-chip">${name}</span>`).join("");
   }
 
   /* =========================================================================
@@ -2078,13 +2151,21 @@ function markReviewAsFlagged(reviewId) {
     poster.style.backgroundImage = item.posterUrl ? `url('${item.posterUrl}')` : "";
     poster.className = "modal__poster";
 
-    const trailerKey = await fetchTrailerKey(id);
+    document.getElementById("modal-cast").innerHTML = "";
+
+    const [trailerKey, castInfo] = await Promise.all([
+      fetchTrailerKey(id),
+      fetchCastInfo(id)
+    ]);
+
     if (trailerKey){
       poster.classList.add("has-trailer");
       poster.onclick = () => window.open(`https://youtube.com/watch?v=${trailerKey}`, "_blank");
     } else {
       poster.onclick = null;
     }
+
+    if (openModalId === id) renderCast(castInfo);
 
     const badge = document.getElementById("modal-badge");
     badge.textContent = item.kind === "game" ? "Game" : "Film";
